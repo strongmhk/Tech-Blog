@@ -2,43 +2,58 @@ import feedparser
 import git
 import os
 
-# 벨로그 RSS 피드 URL
 rss_url = 'https://api.velog.io/rss/@alsgudtkwjs'
-
-# 깃허브 레포지토리 경로
 repo_path = '.'
-
-# 'velog-posts' 폴더 경로
 posts_dir = os.path.join(repo_path, 'velog-posts')
+readme_path = os.path.join(repo_path, 'README.md')
 
-# 'velog-posts' 폴더가 없다면 생성
 if not os.path.exists(posts_dir):
     os.makedirs(posts_dir)
 
-# 레포지토리 로드
 repo = git.Repo(repo_path)
-
-# RSS 피드 파싱
 feed = feedparser.parse(rss_url)
 
-# 각 글을 파일로 저장하고 커밋
-for entry in feed.entries:
-    # 파일 이름에서 유효하지 않은 문자 제거 또는 대체
-    file_name = entry.title
-    file_name = file_name.replace('/', '-')  # 슬래시를 대시로 대체
-    file_name = file_name.replace('\\', '-')  # 백슬래시를 대시로 대체
-    # 필요에 따라 추가 문자 대체
-    file_name += '.md'
-    file_path = os.path.join(posts_dir, file_name)
+has_changes = False
 
-    # 파일이 이미 존재하지 않으면 생성
+# Markdown 파일 저장
+for entry in feed.entries:
+    file_name = entry.title.replace('/', '-').replace('\\', '-') + '.md'
+    file_path = os.path.join(posts_dir, file_name)
     if not os.path.exists(file_path):
         with open(file_path, 'w', encoding='utf-8') as file:
-            file.write(entry.description)  # 글 내용을 파일에 작성
+            file.write(entry.description)
+        has_changes = True
 
-        # 깃허브 커밋
-        repo.git.add(file_path)
-        repo.git.commit('-m', f'Add post: {entry.title}')
+# README.md 생성
+latest_entries = feed.entries[:5]
+readme_content = """## My Velog
 
-# 변경 사항을 깃허브에 푸시
-repo.git.push()
+<p>
+  <a href="https://velog.io/@alsgudtkwjs" target="_blank">
+    <img src="https://img.shields.io/badge/Velog-20C997?style=flat&logo=velog&logoColor=white"/>
+  </a>
+</p>
+
+## 📕 Latest Blog Posts
+
+"""
+
+for entry in latest_entries:
+    readme_content += f"- [{entry.title}]({entry.link})\n"
+
+# 변경 감지 및 파일 저장
+prev_content = ""
+if os.path.exists(readme_path):
+    with open(readme_path, 'r', encoding='utf-8') as f:
+        prev_content = f.read()
+
+if readme_content != prev_content:
+    with open(readme_path, 'w', encoding='utf-8') as f:
+        f.write(readme_content)
+    has_changes = True
+
+# Git add, commit, push
+if has_changes:
+    repo.git.add(all=True)
+    repo.git.commit('-m', 'Sync latest Velog posts and update README with badge')
+    repo.git.push()
